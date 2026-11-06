@@ -3,7 +3,7 @@ const KEY = 'forja.v2';
 
 export const DEFAULT_CFG = {
   provider: 'anthropic', key: '', model: 'claude-sonnet-4-6',
-  base: 'https://openrouter.ai/api/v1', gh: '', instructions: '', maxCtx: 60000
+  base: '', gh: '', instructions: '', maxCtx: 60000, maxSteps: 30, autoSwitch: true, models: [], modelsFor: '', keys: {}, chosen: {}
 };
 
 export const TEMPLATE = {
@@ -15,9 +15,14 @@ export const TEMPLATE = {
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s) { s.cfg = { ...DEFAULT_CFG, ...s.cfg }; return s; }
+    if (s) {
+      const c = s.cfg = { ...DEFAULT_CFG, ...s.cfg };
+      c.keys = { ...c.keys }; c.chosen = { ...c.chosen };
+      if (c.key && !c.keys[c.provider]) c.keys[c.provider] = c.key;
+      return s;
+    }
   } catch {}
-  return { cfg: { ...DEFAULT_CFG }, projects: [], cur: null };
+  return { cfg: { ...DEFAULT_CFG, keys: {}, chosen: {} }, projects: [], cur: null };
 }
 
 export const state = load();
