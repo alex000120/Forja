@@ -7,7 +7,7 @@ export const PROVIDERS = {
   custom:     { label: 'Otro (compatible con OpenAI)', base: '', model: '', keyUrl: '' }
 };
 
-const baseUrl = c => (c.provider === 'custom' ? c.base : PROVIDERS[c.provider].base).replace(/\/$/, '');
+const baseUrl = c => String(c.provider === 'custom' ? c.base : PROVIDERS[c.provider].base).trim().replace(/\/(chat\/completions|completions|models)\/?$/i, '').replace(/\/+$/, '');
 const authHeaders = c => c.provider === 'anthropic'
   ? { 'x-api-key': c.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }
   : { authorization: 'Bearer ' + c.key };
@@ -137,21 +137,68 @@ export async function streamTurn({ cfg, system, messages, tools, signal, onText,
   };
 }
 
+// Normaliza la URL base: quita rutas de endpoint pegadas por error (/chat/completions, /models) y espacios
+const cleanBase = u => String(u || '').trim().replace(/\/(chat\/completions|completions|models)\/?$/i, '').replace(/\/+$/, '');
+
+// Mensaje de error legible (la API puede devolver objeto, array, string o HTML)
+const readErr = (j, st) => {
+  const e = Array.isArray(j) ? j[0] : j;
+  const m = typeof e?.error === 'string' ? e.error : (e?.error?.message || e?.message || '');
+  if (st === 401 || st === 403) return 'La API key no es válida o no tiene permiso (HTTP ' + st + ')' + (m ? ': ' + m : '');
+  return m || ('HTTP ' + st);
+};
+
+async function getJson(url, headers) {
+  let r;
+  try { r = await fetch(url, { headers }); }
+  catch (e) { throw new Error('No se pudo conectar (red, bloqueo CORS o URL incorrecta)'); }
+  let j = {}; try { j = await r.json(); } catch {}
+  if (!r.ok) throw new Error(readErr(j, r.status));
+  return j;
+}
+
+const NOT_CHAT = /embed|tts|whisper|transcribe|image|dall-e|audio|realtime|moderation|speech|imagen|veo|lyria|aqa|robotics|computer-use|search-preview|instruct$/i;
+
 // Detecta los modelos disponibles con la key y el proveedor indicados
 export async function listModels(c) {
-  const url = baseUrl(c) + '/models' + (c.provider === 'anthropic' ? '?limit=1000' : '');
-  const r = await fetch(url, { headers: authHeaders(c) });
-  let j = {}; try { j = await r.json(); } catch {}
-  if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
-  let list = (j.data || []).map(m => {
-    const id = m.id.replace(/^models\//, '');
-    const free = !!(/:free$/.test(m.id) || (m.pricing && +m.pricing.prompt === 0 && +m.pricing.completion === 0));
+  const p = c.provider; let raw = [];
+  if (p === 'anthropic') {
+    // paginado: se piden todas las páginas
+    let after = '';
+    for (let i = 0; i < 5; i++) {
+      const j = await getJson(baseUrl(c) + '/models?limit=1000' + (after ? '&after_id=' + encodeURIComponent(after) : ''), authHeaders(c));
+      raw.push(...(j.data || []));
+      if (!j.has_more || !j.last_id) break; after = j.last_id;
+    }
+  } else if (p === 'gemini') {
+    // API nativa: devuelve TODOS los modelos y cuáles sirven para chat (generateContent). La compatible con OpenAI pagina y no lo indica.
+    try {
+      let tok = '';
+      for (let i = 0; i < 5; i++) {
+        const j = await getJson('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000' + (tok ? '&pageToken=' + encodeURIComponent(tok) : ''), { 'x-goog-api-key': c.key });
+        raw.push(...(j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')));
+        if (!j.nextPageToken) break; tok = j.nextPageToken;
+      }
+    } catch (e) {
+      if (/key|HTTP 40[13]/i.test(e.message)) throw e;
+      raw = (await getJson(baseUrl(c) + '/models', authHeaders(c))).data || [];
+    }
+  } else {
+    const j = await getJson(cleanBase(p === 'custom' ? c.base : PROVIDERS[p].base) + '/models', c.key ? authHeaders(c) : {});
+    raw = Array.isArray(j) ? j : (j.data || j.models || []);
+  }
+  const seen = new Set();
+  let list = raw.map(m => {
+    const rawId = typeof m === 'string' ? m : (m.id || m.name || m.model || '');
+    const id = String(rawId).replace(/^models\//, '');
+    const free = !!(/:free$/.test(id) || (m.pricing && +m.pricing.prompt === 0 && +m.pricing.completion === 0));
     const tools = Array.isArray(m.supported_parameters) ? m.supported_parameters.includes('tools') : undefined;
-    return { id, label: (m.display_name || m.name || id) + (free ? ' · gratis' : ''), free, tools, ctx: m.context_length || m.inputTokenLimit || 0 };
-  });
-  if (c.provider === 'gemini') list = list.filter(m => /^gemini/.test(m.id) && !/embed|tts|image|live|audio/.test(m.id));
-  if (c.provider === 'openai') list = list.filter(m => /^(gpt|o\d|chatgpt)/.test(m.id));
-  if (c.provider !== 'anthropic') list.sort((a, b) => (b.free - a.free) || a.label.localeCompare(b.label));
+    return { id, label: (m.display_name || m.displayName || m.name || id).replace(/^models\//, '') + (free ? ' · gratis' : '') + (tools === false ? ' · sin herramientas' : ''), free, tools, ctx: m.context_length || m.inputTokenLimit || 0 };
+  }).filter(m => m.id && !seen.has(m.id) && seen.add(m.id));
+  if (p === 'gemini') list = list.filter(m => /^gemini/.test(m.id) && !NOT_CHAT.test(m.id));
+  if (p === 'openai') list = list.filter(m => /^(gpt|o\d|chatgpt)/.test(m.id) && !NOT_CHAT.test(m.id));
+  if (p === 'openrouter') list = list.filter(m => !/embed/i.test(m.id));
+  if (p !== 'anthropic') list.sort((a, b) => (b.free - a.free) || a.id.localeCompare(b.id));
   return list;
 }
 

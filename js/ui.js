@@ -23,15 +23,19 @@ export function syncProvider() {
 }
 export function fillModels(list = []) {
   const s = $('#modelsel'); s.innerHTML = '';
+  const q = ($('#mq').value || '').trim().toLowerCase(), onlyFree = $('#mfree').checked;
+  const shown = list.filter(m => (!q || (m.id + ' ' + m.label).toLowerCase().includes(q)) && (!onlyFree || m.free));
   const o0 = document.createElement('option'); o0.value = '';
-  o0.textContent = list.length ? 'Elegí un modelo (' + list.length + ' disponibles)' : 'Sin modelos cargados'; s.append(o0);
-  list.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.label; s.append(o); });
-  s.value = list.some(m => m.id === $('#model').value) ? $('#model').value : '';
+  o0.textContent = !list.length ? 'Sin modelos cargados' : shown.length === list.length ? 'Elegí un modelo (' + list.length + ' disponibles)' : 'Elegí un modelo (' + shown.length + ' de ' + list.length + ')'; s.append(o0);
+  shown.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.label; s.append(o); });
+  $('#mfilter').hidden = list.length < 12;
+  $('#mfreeW').hidden = !list.some(m => m.free);
+  s.value = shown.some(m => m.id === $('#model').value) ? $('#model').value : '';
 }
 export function openCfg() {
   const c = state.cfg;
   $('#prov').value = c.provider; $('#prov').dataset.cur = c.provider; $('#key').value = c.key; $('#model').value = c.model; $('#base').value = c.base;
-  $('#maxctx').value = c.maxCtx; $('#maxsteps').value = c.maxSteps; $('#autosw').checked = c.autoSwitch !== false; $('#ginst').value = c.instructions; $('#ghk').value = c.gh; $('#mstat').textContent = '';
+  $('#maxctx').value = c.maxCtx; $('#maxsteps').value = c.maxSteps; $('#autosw').checked = c.autoSwitch !== false; $('#ginst').value = c.instructions; $('#ghk').value = c.gh; $('#mstat').textContent = ''; $('#mstat').className = ''; $('#mq').value = ''; $('#mfree').checked = false; $('#tstat').textContent = '';
   syncProvider(); fillModels(c.modelsFor === c.provider ? c.models : []);
   $('#dlg').showModal();
 }

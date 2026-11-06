@@ -1,6 +1,6 @@
 // Punto de entrada: eventos y flujo principal
 import { state, save, current, newProject } from './state.js';
-import { listModels, PROVIDERS } from './ai.js';
+import { listModels, PROVIDERS, streamTurn, classify } from './ai.js';
 import { runAgent, cancel } from './agent.js';
 import { importFiles } from './importer.js';
 import { TOOLS, CATEGORIES, MAX_TOOLS } from './instructions.js';
@@ -153,33 +153,68 @@ $('#tclr').onclick = () => { active.clear(); renderTools(); renderToolList(); };
 $('#tok').onclick = () => $('#tdlg').close();
 
 /* configuración y detección de modelos */
+let loadSeq = 0, loadTimer = 0;
+const setStat = (t, kind = '') => { const st = $('#mstat'); st.textContent = t; st.className = kind; };
 async function loadModels(silent) {
-  const cfg = { provider: $('#prov').value, key: $('#key').value.trim(), base: $('#base').value.trim() }, st = $('#mstat');
-  if (!cfg.key || (cfg.provider === 'custom' && !cfg.base)) { if (!silent) st.textContent = 'Completá la API key' + (cfg.provider === 'custom' ? ' y la URL base' : '') + ' primero.'; return; }
-  st.textContent = 'Buscando modelos…'; $('#loadm').disabled = true;
+  clearTimeout(loadTimer);
+  const cfg = { provider: $('#prov').value, key: $('#key').value.trim(), base: $('#base').value.trim() };
+  const needKey = cfg.provider !== 'openrouter'; // OpenRouter lista sus modelos sin clave
+  if ((needKey && !cfg.key) || (cfg.provider === 'custom' && !cfg.base)) {
+    if (!silent) setStat('Completá la API key' + (cfg.provider === 'custom' ? ' y la URL base' : '') + ' primero.', 'warn'); return;
+  }
+  const my = ++loadSeq;   // si el usuario cambia de proveedor/clave mientras carga, se descarta la respuesta vieja
+  setStat('Buscando modelos…', 'busy'); $('#loadm').disabled = true;
   try {
     const list = await listModels(cfg);
+    if (my !== loadSeq) return;
     state.cfg.models = list; state.cfg.modelsFor = cfg.provider; save();
     if (!$('#model').value && list[0]) $('#model').value = list[0].id;
-    fillModels(list); st.textContent = list.length + ' modelos disponibles. Elegí uno de la lista.';
-  } catch (e) { st.textContent = 'No se pudieron cargar: ' + e.message + '. Podés escribir el ID a mano.'; }
-  $('#loadm').disabled = false;
+    fillModels(list);
+    const cur = $('#model').value.trim();
+    setStat(list.length ? '✔ ' + list.length + ' modelos detectados.' + (cur && !list.some(m => m.id === cur) ? ' El modelo actual no figura en la lista: elegí uno.' : '') : 'La API respondió, pero sin modelos de chat. Escribí el ID a mano.', list.length ? 'ok' : 'warn');
+  } catch (e) { if (my === loadSeq) setStat('✖ ' + e.message + '. Podés escribir el ID del modelo a mano.', 'err'); }
+  if (my === loadSeq) $('#loadm').disabled = false;
 }
-$('#cfgb').onclick = () => { openCfg(); if (state.cfg.key && state.cfg.modelsFor !== state.cfg.provider) loadModels(true); };
+const loadSoon = () => { clearTimeout(loadTimer); loadTimer = setTimeout(() => loadModels(true), 600); };
+$('#cfgb').onclick = () => { openCfg(); if ((state.cfg.key || state.cfg.provider === 'openrouter') && state.cfg.modelsFor !== state.cfg.provider) loadModels(true); };
 $('#cx').onclick = () => $('#dlg').close();
 $('#loadm').onclick = () => loadModels(false);
-$('#key').onchange = () => loadModels(true);
-$('#base').onchange = () => loadModels(true);
+$('#key').oninput = loadSoon; $('#key').onchange = () => loadModels(true);
+$('#base').oninput = loadSoon; $('#base').onchange = () => loadModels(true);
+$('#mq').oninput = () => fillModels(state.cfg.modelsFor === $('#prov').value ? state.cfg.models : []);
+$('#mfree').onchange = $('#mq').oninput;
 $('#modelsel').onchange = e => { if (e.target.value) $('#model').value = e.target.value; };
 $('#model').oninput = e => { const s = $('#modelsel'); s.value = [...s.options].some(o => o.value === e.target.value) ? e.target.value : ''; };
+/* prueba de conexión: una llamada mínima con una herramienta de juguete (gasta unos pocos tokens) */
+const TEST_MSG = { auth: 'Clave rechazada: revisá que sea correcta y del servicio elegido.', quota: 'La clave funciona, pero el cupo o el límite de uso está agotado ahora.', model: 'Ese modelo no existe o no admite herramientas: elegí otro.', down: 'El servicio no responde ahora (caída, red o CORS). Probá de nuevo.' };
+let testBusy = false;
+$('#testm').onclick = async () => {
+  if (testBusy) return;
+  const cfg = { provider: $('#prov').value, key: $('#key').value.trim(), base: $('#base').value.trim(), model: $('#model').value.trim() }, t = $('#tstat');
+  const paint = (txt, kind) => { t.textContent = txt; t.className = kind; };
+  if (!cfg.key || !cfg.model || (cfg.provider === 'custom' && !cfg.base)) return paint('Completá clave y modelo primero.', 'warn');
+  testBusy = true; $('#testm').disabled = true; paint('Probando…', 'busy');
+  const t0 = performance.now(), ac = new AbortController(), to = setTimeout(() => ac.abort(), 25000);
+  try {
+    const r = await streamTurn({ cfg, system: 'Probá la herramienta ping y respondé muy breve.', messages: [{ role: 'user', text: 'Llamá a ping.' }],
+      tools: [{ name: 'ping', description: 'Devuelve pong', schema: { type: 'object', properties: {} } }], signal: ac.signal, onText() {}, onPending() {} });
+    const ms = Math.round(performance.now() - t0), usedTool = r.calls.some(c => c.name === 'ping');
+    paint(usedTool ? '✔ Todo OK (' + ms + ' ms): la clave, el modelo y las herramientas funcionan.' : '⚠ Conecta (' + ms + ' ms), pero el modelo no usó la herramienta de prueba: puede fallar como agente.', usedTool ? 'ok' : 'warn');
+  } catch (e) {
+    const k = e.name === 'AbortError' ? 'down' : (e.status === 401 || e.status === 403 ? 'auth' : classify(e));
+    paint('✖ ' + (TEST_MSG[k] || (k === 'fatal' ? TEST_MSG.auth : e.message)) + (e.message && k !== 'auth' ? ' (' + e.message.slice(0, 140) + ')' : ''), 'err');
+  }
+  clearTimeout(to); testBusy = false; $('#testm').disabled = false;
+};
 let draftKeys = {}, draftModel = {};
-$('#dlg').addEventListener('close', () => { draftKeys = {}; draftModel = {}; });
+$('#dlg').addEventListener('close', () => { draftKeys = {}; draftModel = {}; loadSeq++; });
 $('#prov').onchange = e => {
   const old = e.target.dataset.cur, now = e.target.value, c = state.cfg;
   draftKeys[old] = $('#key').value.trim(); draftModel[old] = $('#model').value.trim(); e.target.dataset.cur = now;
   $('#key').value = draftKeys[now] ?? c.keys[now] ?? '';
   $('#model').value = draftModel[now] || c.chosen[now] || PROVIDERS[now].model;
-  syncProvider(); state.cfg.models = []; state.cfg.modelsFor = ''; fillModels([]); $('#mstat').textContent = ''; loadModels(true);
+  $('#mq').value = ''; $('#mfree').checked = false; $('#tstat').textContent = '';
+  syncProvider(); fillModels([]); setStat(''); loadModels(true);
 };
 $('#sv').onclick = () => {
   const prov = $('#prov').value, c = state.cfg, keep = c.modelsFor === prov;
@@ -253,6 +288,6 @@ state.projects.forEach(p => {
 save();
 /* inicio */
 if (!state.projects.length) newProject('Mi primer proyecto'); else if (!current()) state.cur = state.projects[0].id;
-renderTools(); renderAll(); if (!state.cfg.key) setTimeout(openCfg, 400);
+renderTools(); renderAll(); if (!state.cfg.key) setTimeout(() => { if (!$('#dlg').open) openCfg(); }, 400);
 
 document.getElementById('ver') && (document.getElementById('ver').textContent = 'v' + VERSION);
