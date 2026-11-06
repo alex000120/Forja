@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forja · Constructor de webs con IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body data-v="c">
+<nav class="mnav"><button data-v="p">Proyectos</button><button data-v="c" class="on">Chat</button><button data-v="v">Vista</button></nav>
+
+<aside class="pane" id="side">
+  <div class="head"><h1>Forja</h1><button class="pri" id="newp">Nuevo</button></div>
+  <div id="plist"></div>
+  <div class="side-foot"><button id="cfgb">Configuración y API</button></div>
+</aside>
+
+<main class="pane" id="chat">
+  <div class="head"><strong id="pname">Sin proyecto</strong>
+    <div class="tools"><button id="instb">Instrucciones</button><button id="ren">Renombrar</button></div></div>
+  <div id="msgs"></div>
+  <form class="in" id="form"><textarea id="inp" rows="2" placeholder="Describí qué querés crear o cambiar…"></textarea><button class="pri" id="send">Enviar</button></form>
+</main>
+
+<section class="pane" id="prev">
+  <div class="head">
+    <div class="tabs"><button class="on" data-t="view">Vista previa</button><button data-t="code">Código</button></div>
+    <div class="tools">
+      <select id="page" aria-label="Página a previsualizar"></select>
+      <button data-w="100%" class="dev on">Escritorio</button><button data-w="768px" class="dev">Tablet</button><button data-w="390px" class="dev">Móvil</button>
+      <button id="reload">Recargar</button><button id="zip">ZIP</button><button id="gh">GitHub</button>
+    </div>
+  </div>
+  <div id="view"><iframe id="frame" sandbox="allow-scripts allow-forms allow-modals allow-popups" title="Vista previa del proyecto"></iframe></div>
+  <div id="code">
+    <div class="tools"><select id="fsel" aria-label="Archivo"></select><button id="newf">Nuevo archivo</button><button id="delf">Borrar archivo</button></div>
+    <textarea id="ed" spellcheck="false" aria-label="Editor de código"></textarea>
+  </div>
+</section>
+
+<dialog id="dlg">
+  <h2>Configuración</h2>
+  <label for="prov">Proveedor de IA</label>
+  <select id="prov"><option value="anthropic">Anthropic (Claude)</option><option value="openai">Compatible con OpenAI (OpenRouter, OpenAI, etc.)</option></select>
+  <label for="key">API key</label><input id="key" type="password" autocomplete="off" placeholder="sk-…">
+  <label for="model">Modelo</label><input id="model" placeholder="claude-sonnet-4-6">
+  <div id="baseW"><label for="base">URL base de la API</label><input id="base" placeholder="https://openrouter.ai/api/v1"></div>
+  <label for="maxctx">Contexto máximo de archivos (caracteres)</label><input id="maxctx" type="number" min="5000" step="5000">
+  <small>Los archivos que no entren se listan por nombre, sin contenido.</small>
+  <label for="ginst">Instrucciones globales para la IA</label>
+  <textarea id="ginst" rows="4" placeholder="Ej: Escribí siempre en español, usá CSS moderno, nada de librerías pesadas…"></textarea>
+  <small>Se aplican a todos los proyectos.</small>
+  <label for="ghk">Token de GitHub (opcional)</label><input id="ghk" type="password" autocomplete="off" placeholder="ghp_…">
+  <small>Todo se guarda solo en este navegador.</small>
+  <div class="row"><button id="cx">Cancelar</button><button class="pri" id="sv">Guardar</button></div>
+</dialog>
+
+<dialog id="idlg">
+  <h2>Instrucciones del proyecto</h2>
+  <label for="pinst">Qué debe saber la IA sobre este proyecto</label>
+  <textarea id="pinst" rows="10" placeholder="Marca, público, paleta, tipografías, secciones, tono de los textos, tecnologías permitidas…"></textarea>
+  <small>Se envían en cada mensaje, junto a las instrucciones globales.</small>
+  <div class="row"><button id="icx">Cancelar</button><button class="pri" id="isv">Guardar</button></div>
+</dialog>
+<div id="toast" role="status"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
