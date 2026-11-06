@@ -1,4 +1,4 @@
-# Forja · v1.2
+# Forja · v1.4
 
 **Agente autónomo para crear y mantener páginas y apps web.** Le das un objetivo; Forja planifica, escribe los archivos, los prueba en un navegador oculto y corrige lo que falla. Sitios estáticos sin build, listos para GitHub Pages o Vercel.
 
@@ -29,6 +29,14 @@ js/ai.js · state.js · ui.js · export.js · importer.js · version.js
 | Recursos externos | `lookup_library` `fetch_url` |
 | Organización y memoria | `update_plan` `save_note` `use_playbook` |
 | Autonomía (v1.2) | `write_files` `replace_in_files` `checkpoint` `diff_changes` `audit_page` `find_unused` `add_boilerplate` |
+
+## Novedades de la versión 1.4
+- **⚡ Probar conexión** (en Configuración): una llamada mínima que comprueba clave, modelo y uso de herramientas, y explica el resultado (clave rechazada, cupo agotado, modelo sin herramientas, servicio caído).
+
+## Novedades de la versión 1.3
+- **Detección de modelos corregida**: Gemini usa su API nativa (lista completa y solo modelos de chat), Anthropic pagina, OpenAI/Gemini descartan embeddings, audio e imágenes, OpenRouter funciona sin clave, y los proveedores personalizados aceptan `data` o `models` y URLs pegadas con `/chat/completions`. Los errores ahora dicen qué pasó (clave inválida, CORS/red).
+- Se detecta al pegar la clave (sin tener que salir del campo) y se descartan respuestas viejas si cambiás de proveedor.
+- Configuración rediseñada por secciones, con filtro de modelos y casilla «Solo gratis». Interfaz con nuevo estilo.
 
 ## Novedades de la versión 1.2
 - `write_files`: hasta 8 archivos completos en una sola llamada (todo o nada).

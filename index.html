@@ -13,14 +13,14 @@
 <nav class="mnav"><button data-v="p">Proyectos</button><button data-v="c" class="on">Chat</button><button data-v="v">Vista</button></nav>
 
 <aside class="pane" id="side">
-  <div class="head"><h1>Forja <small id="ver" style="font-weight:400;font-size:.55em;opacity:.6"></small></h1><button class="pri" id="newp">Nuevo</button></div>
+  <div class="head"><h1>Forja <small id="ver" style="font-weight:400;font-size:.55em;opacity:.6"></small></h1><button class="pri" id="newp">＋ Nuevo</button></div>
   <div id="plist"></div>
-  <div class="side-foot"><button id="impb">Importar sitio (ZIP o archivos)</button><input type="file" id="imp" multiple hidden accept=".zip,.html,.htm,.css,.js,.mjs,.json,.svg,.md,.txt,.xml,.webmanifest,.csv"><button id="cfgb">Configuración y API</button></div>
+  <div class="side-foot"><button id="impb">⇪ Importar sitio (ZIP o archivos)</button><input type="file" id="imp" multiple hidden accept=".zip,.html,.htm,.css,.js,.mjs,.json,.svg,.md,.txt,.xml,.webmanifest,.csv"><button id="cfgb">⚙ Configuración y API</button></div>
 </aside>
 
 <main class="pane" id="chat">
   <div class="head"><strong id="pname">Sin proyecto</strong>
-    <div class="tools"><button id="instb">Instrucciones</button><button id="ren">Renombrar</button></div></div>
+    <div class="tools"><button id="instb">📝 Instrucciones</button><button id="ren">Renombrar</button></div></div>
   <div id="msgs"></div>
   <div id="tools" class="toolbar" role="group" aria-label="Herramientas"></div>
   <form class="in" id="form"><textarea id="inp" rows="2" placeholder="Dale un objetivo al agente: qué construir, arreglar o mejorar…"></textarea><button class="pri" id="send">Ejecutar</button></form>
@@ -45,25 +45,37 @@
 
 <dialog id="dlg">
   <h2>Configuración</h2>
-  <label for="prov">Servicio de IA</label>
-  <select id="prov"><option value="anthropic">Anthropic (Claude)</option><option value="openrouter">OpenRouter (muchos modelos)</option><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="custom">Otro (compatible con OpenAI)</option></select>
-  <label for="key">API key <a id="keylink" href="#" target="_blank" rel="noopener">consíguela aquí</a></label><input id="key" type="password" autocomplete="off" placeholder="Pegá tu API key">
-  <label for="model">Modelo</label>
-  <div class="inline"><select id="modelsel" aria-label="Modelos disponibles"></select><button type="button" id="loadm">Cargar modelos</button></div>
-  <input id="model" placeholder="o escribí el ID del modelo a mano" style="margin-top:8px">
-  <small id="mstat" aria-live="polite"></small>
-  <div id="baseW"><label for="base">URL base de la API</label><input id="base" placeholder="https://tu-servicio.com/v1"></div>
-  <label for="maxctx">Máximo de caracteres por lectura de archivo</label><input id="maxctx" type="number" min="5000" step="5000">
-  <small>El agente lee los archivos por su cuenta; los largos se leen por partes.</small>
-  <label for="maxsteps">Pasos máximos del agente por pedido</label><input id="maxsteps" type="number" min="5" max="80" step="5">
-  <small>Cada paso es una llamada a la API. Más pasos = trabajos más largos y más consumo.</small>
-  <label class="chk"><input type="checkbox" id="autosw"> Cambiar de modelo automáticamente si se agota el cupo</label>
-  <small>Solo Gemini y OpenRouter. En OpenRouter los respaldos son únicamente modelos gratuitos con soporte de herramientas.</small>
-  <label for="ginst">Instrucciones globales para el agente</label>
-  <textarea id="ginst" rows="4" placeholder="Ej: Escribí siempre en español, usá CSS moderno, nada de librerías pesadas…"></textarea>
-  <small>Se aplican a todos los proyectos.</small>
-  <label for="ghk">Token de GitHub (opcional)</label><input id="ghk" type="password" autocomplete="off" placeholder="ghp_…">
-  <small>Todo se guarda solo en este navegador.</small>
+  <section class="sec">
+    <h3><span>1</span> Conexión con la IA</h3>
+    <label for="prov">Servicio</label>
+    <select id="prov"><option value="anthropic">Anthropic (Claude)</option><option value="openrouter">OpenRouter (muchos modelos)</option><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="custom">Otro (compatible con OpenAI)</option></select>
+    <div id="baseW"><label for="base">URL base de la API</label><input id="base" placeholder="https://tu-servicio.com/v1" autocomplete="off"></div>
+    <label for="key">API key <a id="keylink" href="#" target="_blank" rel="noopener">consíguela aquí ↗</a></label>
+    <input id="key" type="password" autocomplete="off" placeholder="Pegá tu API key — los modelos se detectan solos">
+    <label for="modelsel">Modelo</label>
+    <div class="inline"><select id="modelsel" aria-label="Modelos disponibles"></select><button type="button" id="loadm" title="Volver a detectar los modelos">↻ Detectar</button></div>
+    <div id="mfilter" class="inline mf" hidden><input id="mq" type="search" placeholder="Filtrar modelos…" aria-label="Filtrar modelos" autocomplete="off"><label id="mfreeW" class="chk" hidden><input type="checkbox" id="mfree"> Solo gratis</label></div>
+    <input id="model" placeholder="o escribí el ID del modelo a mano" autocomplete="off" style="margin-top:8px">
+    <div class="inline" style="margin-top:8px;align-items:center"><button type="button" id="testm" title="Envía una llamada mínima para comprobar clave, modelo y herramientas">⚡ Probar conexión</button><small id="tstat" aria-live="polite" style="margin:0"></small></div>
+    <small id="mstat" aria-live="polite"></small>
+  </section>
+  <section class="sec">
+    <h3><span>2</span> Comportamiento del agente</h3>
+    <div class="two">
+      <div><label for="maxsteps">Pasos máximos por pedido</label><input id="maxsteps" type="number" min="5" max="80" step="5"></div>
+      <div><label for="maxctx">Caracteres por lectura</label><input id="maxctx" type="number" min="5000" step="5000"></div>
+    </div>
+    <small>Cada paso es una llamada a la API: más pasos = trabajos más largos y más consumo. Los archivos largos se leen por partes.</small>
+    <label class="chk"><input type="checkbox" id="autosw"> Cambiar de modelo si se agota el cupo</label>
+    <small>Solo Gemini y OpenRouter. En OpenRouter los respaldos son modelos gratuitos con soporte de herramientas.</small>
+    <label for="ginst">Instrucciones globales</label>
+    <textarea id="ginst" rows="3" placeholder="Ej: Escribí siempre en español, usá CSS moderno, nada de librerías pesadas…"></textarea>
+  </section>
+  <section class="sec">
+    <h3><span>3</span> Publicación</h3>
+    <label for="ghk">Token de GitHub (opcional)</label><input id="ghk" type="password" autocomplete="off" placeholder="ghp_…">
+    <small>Todo se guarda solo en este navegador.</small>
+  </section>
   <div class="row"><button id="cx">Cancelar</button><button class="pri" id="sv">Guardar</button></div>
 </dialog>
 
